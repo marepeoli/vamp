@@ -10,6 +10,13 @@ CREATE TABLE IF NOT EXISTS "atleta" (
 	FOREIGN KEY("modalidade_id") REFERENCES "modalidade"("id"),
 	FOREIGN KEY("usuario_id") REFERENCES "usuario"("id")
 );
+CREATE TABLE IF NOT EXISTS "atleta_modalidade" (
+	"atleta_id"	INTEGER,
+	"modalidade_id"	INTEGER,
+	PRIMARY KEY("atleta_id","modalidade_id"),
+	FOREIGN KEY("atleta_id") REFERENCES "atleta"("id"),
+	FOREIGN KEY("modalidade_id") REFERENCES "modalidade"("id")
+);
 CREATE TABLE IF NOT EXISTS "evento" (
 	"id"	INTEGER,
 	"tipo"	TEXT NOT NULL,
@@ -51,6 +58,13 @@ CREATE TABLE IF NOT EXISTS "treinador" (
 	PRIMARY KEY("id" AUTOINCREMENT),
 	FOREIGN KEY("modalidade_id") REFERENCES "modalidade"("id")
 );
+CREATE TABLE IF NOT EXISTS "treinador_modalidade" (
+	"treinador_id"	INTEGER,
+	"modalidade_id"	INTEGER,
+	PRIMARY KEY("treinador_id","modalidade_id"),
+	FOREIGN KEY("modalidade_id") REFERENCES "modalidade"("id"),
+	FOREIGN KEY("treinador_id") REFERENCES "treinador"("id")
+);
 CREATE TABLE IF NOT EXISTS "treino" (
 	"id"	INTEGER,
 	"data"	TEXT NOT NULL,
@@ -67,6 +81,7 @@ CREATE TABLE IF NOT EXISTS "usuario" (
 	"email"	TEXT UNIQUE,
 	"plano_id"	INTEGER,
 	"senha"	TEXT,
+	"perfil"	TEXT,
 	PRIMARY KEY("id" AUTOINCREMENT),
 	FOREIGN KEY("plano_id") REFERENCES "plano"("id")
 );
@@ -82,15 +97,17 @@ INSERT INTO "frequencia" VALUES (3,3,2,0);
 INSERT INTO "modalidade" VALUES (1,'futsal');
 INSERT INTO "modalidade" VALUES (2,'volei');
 INSERT INTO "modalidade" VALUES (3,'basquete');
+INSERT INTO "modalidade" VALUES (4,'futvolei');
 INSERT INTO "plano" VALUES (1,'bronze',1,0);
 INSERT INTO "plano" VALUES (2,'prata',1,1);
 INSERT INTO "plano" VALUES (3,'ouro',1,2);
 INSERT INTO "plano" VALUES (4,'diamante',1,99);
+INSERT INTO "treinador" VALUES (1,'Simões',1);
 INSERT INTO "treino" VALUES (1,'09/04/2025','19:00','Sest Senat',1);
 INSERT INTO "treino" VALUES (2,'16/05/2025','10:30','Sest Senat',2);
 INSERT INTO "treino" VALUES (3,'24/05/2025','09:00','AABB',3);
-INSERT INTO "usuario" VALUES (1,7077665917,'mare.oliveira@icloud.com',4,'1234');
-INSERT INTO "usuario" VALUES (2,123456789,'dayane@gmail.com',2,'abcd');
-INSERT INTO "usuario" VALUES (3,321654987,'fernanda@gmail.com',1,'5678');
-INSERT INTO "usuario" VALUES (4,987654321,'alan@gmail.com',3,'efgh');
+INSERT INTO "usuario" VALUES (1,7077665917,'mare.oliveira@icloud.com',4,'1234',NULL);
+INSERT INTO "usuario" VALUES (2,123456789,'dayane@gmail.com',2,'abcd',NULL);
+INSERT INTO "usuario" VALUES (3,321654987,'fernanda@gmail.com',1,'5678',NULL);
+INSERT INTO "usuario" VALUES (4,987654321,'alan@gmail.com',3,'efgh',NULL);
 COMMIT;
