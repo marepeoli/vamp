@@ -1,121 +1,36 @@
 BEGIN TRANSACTION;
-CREATE TABLE IF NOT EXISTS "atleta" (
-	"id"	INTEGER,
-	"nome"	TEXT NOT NULL,
-	"idade"	INTEGER,
-	"modalidade_id"	INTEGER,
-	"dados_tecnicos"	TEXT,
-	"usuario_id"	INTEGER,
-	PRIMARY KEY("id" AUTOINCREMENT),
-	FOREIGN KEY("usuario_id") REFERENCES "usuario"("id")
-);
-CREATE TABLE IF NOT EXISTS "atleta_modalidade" (
-	"atleta_id"	INTEGER,
-	"modalidade_id"	INTEGER,
-	PRIMARY KEY("atleta_id","modalidade_id"),
-	FOREIGN KEY("atleta_id") REFERENCES "atleta"("id"),
-	FOREIGN KEY("modalidade_id") REFERENCES "modalidade"("id")
-);
-CREATE TABLE IF NOT EXISTS "evento" (
-	"id"	INTEGER,
-	"tipo"	TEXT NOT NULL,
-	"valor"	REAL,
-	"status"	TEXT,
-	"data"	TEXT,
-	PRIMARY KEY("id" AUTOINCREMENT)
-);
-CREATE TABLE IF NOT EXISTS "frequencia" (
-	"id"	INTEGER,
-	"atleta_id"	INTEGER,
-	"treino_id"	INTEGER,
-	"presente"	INTEGER,
-	PRIMARY KEY("id" AUTOINCREMENT),
-	FOREIGN KEY("atleta_id") REFERENCES "atleta"("id"),
-	FOREIGN KEY("treino_id") REFERENCES "treino"("id")
-);
-CREATE TABLE IF NOT EXISTS "local" (
-	"id"	INTEGER,
-	"nome"	TEXT NOT NULL,
-	"endereco"	TEXT,
-	PRIMARY KEY("id" AUTOINCREMENT)
-);
-CREATE TABLE IF NOT EXISTS "modalidade" (
-	"id"	INTEGER,
-	"nome"	TEXT NOT NULL,
-	PRIMARY KEY("id" AUTOINCREMENT)
-);
-CREATE TABLE IF NOT EXISTS "padrao_treino" (
-	"id"	INTEGER,
-	"nivel"	TEXT,
-	"modalidade_id"	INTEGER,
-	"dia_semana"	TEXT,
-	"horario"	NUMERIC,
-	PRIMARY KEY("id"),
-	CONSTRAINT "modalidade" FOREIGN KEY("modalidade_id") REFERENCES ""
-);
-CREATE TABLE IF NOT EXISTS "perfil_usuario" (
-	"id"	INTEGER,
-	"nome"	INTEGER NOT NULL UNIQUE,
-	PRIMARY KEY("id" AUTOINCREMENT)
-);
-CREATE TABLE IF NOT EXISTS "plano" (
-	"id"	INTEGER,
-	"nome"	TEXT NOT NULL,
-	"acesso_aulas"	INTEGER NOT NULL,
-	"acesso_modalidades"	INTEGER NOT NULL,
-	PRIMARY KEY("id" AUTOINCREMENT)
-);
-CREATE TABLE IF NOT EXISTS "treinador" (
-	"id"	INTEGER,
-	"nome"	TEXT NOT NULL,
-	"usuario_id"	INTEGER,
-	"especialidade"	TEXT,
-	PRIMARY KEY("id" AUTOINCREMENT),
-	FOREIGN KEY("usuario_id") REFERENCES "usuario"("id")
-);
-CREATE TABLE IF NOT EXISTS "treinador_modalidade" (
-	"treinador_id"	INTEGER,
-	"modalidade_id"	INTEGER,
-	PRIMARY KEY("treinador_id","modalidade_id"),
-	FOREIGN KEY("modalidade_id") REFERENCES "modalidade"("id"),
-	FOREIGN KEY("treinador_id") REFERENCES "treinador"("id")
-);
-CREATE TABLE IF NOT EXISTS "treino" (
-	"id"	INTEGER,
-	"data"	TEXT NOT NULL,
-	"horario"	TEXT NOT NULL,
-	"local_id"	INTEGER NOT NULL,
-	"modalidade_id"	INTEGER,
-	"status"	TEXT,
-	PRIMARY KEY("id"),
-	FOREIGN KEY("local_id") REFERENCES "local"("id"),
-	FOREIGN KEY("modalidade_id") REFERENCES "modalidade"("id")
-);
 CREATE TABLE IF NOT EXISTS "usuario" (
-	"id"	INTEGER,
-	"email"	TEXT NOT NULL,
-	"senha"	TEXT NOT NULL,
-	"perfil_id"	INTEGER,
-	PRIMARY KEY("id" AUTOINCREMENT),
-	FOREIGN KEY("perfil_id") REFERENCES "perfil_usuario"("id")
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    senha TEXT NOT NULL,
+    tipo TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS "checkins" (
-	"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
-	"email_atleta"	TEXT NOT NULL,
-	"data_checkin"	DATE NOT NULL,
-	"modalidade"	TEXT NOT NULL,
-	"local"	TEXT NOT NULL,
-	"horario"	TEXT NOT NULL,
-	"created_at"	DATETIME DEFAULT CURRENT_TIMESTAMP,
-	FOREIGN KEY("email_atleta") REFERENCES "atletas"("email"),
-	UNIQUE("email_atleta","data_checkin")
+CREATE TABLE IF NOT EXISTS "atleta" (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    usuario_id INTEGER,
+    FOREIGN KEY(usuario_id) REFERENCES usuario(id)
 );
+CREATE TABLE IF NOT EXISTS "recomendacao" (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    titulo TEXT NOT NULL,
+    link TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "dias_checkin" (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    dia INTEGER NOT NULL,
+    mes INTEGER NOT NULL,
+    ano INTEGER NOT NULL,
+    local TEXT NOT NULL,
+    horario TEXT NOT NULL,
+    modalidade TEXT NOT NULL
+);
+
 INSERT INTO "atleta" VALUES (1,'mariana oliveira',37,1,'pivo',1);
 INSERT INTO "atleta" VALUES (2,'dayane cristina',37,1,'goleira',NULL);
 INSERT INTO "atleta" VALUES (3,'fernanda ramos',30,2,'levantadora',NULL);
 INSERT INTO "atleta" VALUES (4,'alan ribeiro',31,3,'armador',NULL);
 INSERT INTO "atleta" VALUES (5,'Giovana Borghesi',25,2,'Perfil atleta',NULL);
-INSERT INTO "atleta_modalidade" VALUES (5,2);
 INSERT INTO "evento" VALUES (1,'camiseta',90.0,'ativo',NULL);
 INSERT INTO "evento" VALUES (2,'shorts',45.0,'encerrado',NULL);
 INSERT INTO "frequencia" VALUES (1,1,1,1);

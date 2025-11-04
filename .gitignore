@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Database
+*.db
+*.db-journal
+*.db.sql
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend (React)
+frontend-app/node_modules/
+frontend-app/build/
+frontend-app/.env.local
+frontend-app/.env.development.local
+frontend-app/.env.test.local
+frontend-app/.env.production.local
+frontend-app/npm-debug.log*
+frontend-app/yarn-debug.log*
+frontend-app/yarn-error.log*
+
+# Evitar venv incorreto no frontend
+frontend-app/venv/
+frontend-app/env/
+node_modules
