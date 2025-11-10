@@ -1,17 +1,17 @@
 BEGIN TRANSACTION;
--- Criar tabela treinos se não existir
-CREATE TABLE IF NOT EXISTS treinos (
+
+-- VampClub Database Schema
+-- Sistema de gerenciamento de treinos e eventos esportivos
+
+-- Tabela de usuários para login
+CREATE TABLE IF NOT EXISTS login_users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    data TEXT NOT NULL,
-    hora TEXT NOT NULL,
-    modalidade TEXT NOT NULL,
-    local TEXT NOT NULL,
-    vagas_total INTEGER NOT NULL,
-    vagas_disponiveis INTEGER NOT NULL,
+    username TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Criar tabela usuario para o login (caso não exista)
+-- Tabela principal de usuários
 CREATE TABLE IF NOT EXISTS usuario (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nome TEXT NOT NULL,
@@ -20,7 +20,38 @@ CREATE TABLE IF NOT EXISTS usuario (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Criar tabela checkins se não existir
+-- Tabela de usuários (sistema secundário)
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabela de eventos
+CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    date TEXT NOT NULL,
+    location TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabela de treinos
+CREATE TABLE IF NOT EXISTS treinos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    data TEXT NOT NULL,               -- ISO date YYYY-MM-DD
+    hora TEXT NOT NULL,
+    modalidade TEXT NOT NULL,
+    local TEXT NOT NULL,
+    vagas_total INTEGER NOT NULL,
+    vagas_disponiveis INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabela de check-ins
 CREATE TABLE IF NOT EXISTS checkins (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     treino_id INTEGER NOT NULL,
@@ -29,25 +60,20 @@ CREATE TABLE IF NOT EXISTS checkins (
     FOREIGN KEY(treino_id) REFERENCES treinos(id)
 );
 
--- Limpar treinos existentes para evitar duplicatas
-DELETE FROM treinos;
+-- Dados iniciais de usuários de teste
+INSERT OR IGNORE INTO usuario (nome, email, senha) VALUES 
+    ('Mariana Oliveira', 'mare.oliveira@icloud.com', '123456'),
+    ('Dayane Silva', 'dayane@gmail.com', '123456'),
+    ('João Santos', 'joao@gmail.com', '123456');
 
--- Inserir treinos para os sábados de novembro/dezembro 2024 (próximos sábados)
-INSERT INTO treinos (data, hora, modalidade, local, vagas_total, vagas_disponiveis) VALUES
-('2024-11-02', '09:00', 'Futsal Avançado', 'Sest Senat', 12, 12),
-('2024-11-09', '09:00', 'Futsal Avançado', 'Sest Senat', 12, 12),
-('2024-11-16', '09:00', 'Futsal Avançado', 'Sest Senat', 12, 12),
-('2024-11-23', '09:00', 'Futsal Avançado', 'Sest Senat', 12, 12),
-('2024-11-30', '09:00', 'Futsal Avançado', 'Sest Senat', 12, 12),
-('2024-12-07', '09:00', 'Futsal Avançado', 'Sest Senat', 12, 12),
-('2024-12-14', '09:00', 'Futsal Avançado', 'Sest Senat', 12, 12),
-('2024-12-21', '09:00', 'Futsal Avançado', 'Sest Senat', 12, 12),
-('2024-12-28', '09:00', 'Futsal Avançado', 'Sest Senat', 12, 12);
+-- Usuário admin padrão
+INSERT OR IGNORE INTO login_users (username, password) VALUES 
+    ('admin', 'admin');
 
--- Inserir usuário de teste para login
-INSERT OR IGNORE INTO usuario (nome, email, senha) VALUES
-('Mariana Oliveira', 'mariana@vamp.com', '123456'),
-('Usuario Teste', 'teste@vamp.com', 'senha123'),
-('Admin', 'admin@vamp.com', 'admin');
+-- Eventos de exemplo
+INSERT OR IGNORE INTO events (title, description, date, location) VALUES 
+    ('Campeonato InterVamp 2025', 'Campeonato interno de todas as modalidades', '2025-02-15', 'Quadras A e B'),
+    ('Treino Especial de Verão', 'Treino intensivo preparatório para o verão', '2025-01-20', 'Quadra A'),
+    ('Torneio de Futsal', 'Torneio eliminatório de futsal', '2025-03-10', 'Quadra B');
 
 COMMIT;

@@ -1,32 +1,38 @@
 {
-  "name": "vampclub-frontend",
+  "name": "vamp-app",
   "version": "0.1.0",
   "private": true,
-  "dependencies": {
-    "@fontsource/poppins": "^5.2.6",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-icons": "^5.5.0",
-    "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.4"
-  },
-  "devDependencies": {
-    "postcss-initial": "^3.0.4"
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+  "description": "VampApp - Sistema de gerenciamento de treinos e eventos esportivos",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/marepeoli/vamp-app.git"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build"
-  }
+    "start": "uvicorn main:app --reload",
+    "build": "python -m build",
+    "test": "pytest",
+    "frontend": "cd frontend-app && npm start"
+  },
+  "dependencies": {
+    "fastapi": "^0.104.1",
+    "uvicorn": "^0.24.0",
+    "python-multipart": "^0.0.6",
+    "pydantic": "^2.5.0"
+  },
+  "devDependencies": {
+    "pytest": "^7.4.0"
+  },
+  "engines": {
+    "python": ">=3.8",
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "fastapi",
+    "react",
+    "sqlite",
+    "sports-management",
+    "check-in-system"
+  ],
+  "author": "Mariana Oliveira",
+  "license": "MIT"
 }
