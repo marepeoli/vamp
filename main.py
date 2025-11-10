@@ -3,9 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Request
 from pydantic import BaseModel
 import sqlite3
+import hashlib
 from typing import List
 from datetime import datetime, date, timedelta
-import hashlib
 
 app = FastAPI()
 
@@ -128,6 +128,20 @@ def init_db():
         )
         print("✅ Usuário admin criado com sucesso!")
     
+    # Criar tabela usuario com as colunas corretas (apenas se não existir)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS usuario (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            senha TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Remover criação automática de usuários - usar apenas os existentes no banco
+    # Os usuários já existem: mare.oliveira@icloud.com, dayane@gmail.com, etc.
+    
     conn.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -220,6 +234,7 @@ async def login(credentials: LoginRequest):
     print(f"🔍 Tentativa de login: {credentials.username}")
 
     conn = get_db_connection()
+    
     # Buscar usuário na tabela usuario (pode ser por email ou nome)
     user = conn.execute(
         'SELECT * FROM usuario WHERE email = ? OR nome = ?',
@@ -321,20 +336,20 @@ async def get_recomendacoes():
     recomendacoes = [
         {
             "id": 1,
-            "titulo": "Novo Treino de Futsal",
-            "descricao": "Participe do treino de futsal toda terça e quinta às 19h",
+            "titulo": "Treinos de Verão 2025",
+            "descricao": "Prepare-se para o verão com nossos treinos intensivos de janeiro e fevereiro",
             "tipo": "evento"
         },
         {
             "id": 2,
-            "titulo": "Torneio de Basquete",
-            "descricao": "Inscrições abertas para o torneio do próximo mês",
+            "titulo": "Campeonato InterVamp",
+            "descricao": "Inscrições abertas para o campeonato interno de todas as modalidades",
             "tipo": "evento"
         },
         {
             "id": 3,
-            "titulo": "Dica de Aquecimento",
-            "descricao": "Sempre faça 10 minutos de aquecimento antes dos treinos",
+            "titulo": "Dica: Hidratação",
+            "descricao": "Beba pelo menos 500ml de água 2 horas antes do treino para melhor performance",
             "tipo": "dica"
         }
     ]
@@ -398,8 +413,8 @@ async def get_proximos_checkins():
     print("📅 Buscando próximos check-ins disponíveis (tabela treinos)")
     conn = get_db_connection()
     hoje = date.today()
-    inicio = hoje + timedelta(days=1)
-    fim = hoje + timedelta(days=7)
+    inicio = hoje
+    fim = hoje + timedelta(days=30)  # Aumentado para 30 dias para pegar os sábados de novembro
     rows = conn.execute(
         'SELECT * FROM treinos WHERE data BETWEEN ? AND ? ORDER BY data ASC, hora ASC',
         (inicio.isoformat(), fim.isoformat())
@@ -408,17 +423,21 @@ async def get_proximos_checkins():
 
     proximos = []
     for r in rows:
-        proximos.append({
-            "id": r['id'],
-            "data": r['data'],
-            "dia_semana": datetime.fromisoformat(r['data']).strftime("%A"),
-            "hora": r['hora'],
-            "modalidade": r['modalidade'],
-            "vagas_disponiveis": r['vagas_disponiveis'],
-            "disponivel": bool(r['vagas_disponiveis'] > 0),
-            "local": r['local']
-        })
-    print(f"✅ Retornando {len(proximos)} check-ins disponíveis")
+        d = datetime.fromisoformat(r['data']).date()
+        # Filtrar apenas sábados (como na tela de check-in)
+        if d.weekday() == 5:  # sábado
+            proximos.append({
+                "id": r['id'],
+                "data": r['data'],
+                "dia_semana": "Sábado",
+                "hora": r['hora'],
+                "modalidade": r['modalidade'],
+                "vagas_disponiveis": r['vagas_disponiveis'],
+                "disponivel": bool(r['vagas_disponiveis'] > 0),
+                "local": r['local']
+            })
+    
+    print(f"✅ Retornando {len(proximos)} check-ins disponíveis (sábados)")
     return proximos
 
 @app.post("/api/checkin-rapido")
@@ -461,12 +480,10 @@ async def fazer_checkin_rapido(checkin: CheckinRequest):
         }
     except HTTPException as e:
         conn.rollback()
-        conn.close()
         print(f"❌ Check-in falhou: {e.detail}")
         raise
     except Exception as e:
         conn.rollback()
-        conn.close()
         print(f"❌ Erro interno no check-in rápido: {e}")
         raise HTTPException(status_code=500, detail="Erro ao processar check-in")
     finally:
