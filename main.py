@@ -1,18 +1,17 @@
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import Request
-from pydantic import BaseModel
+from fastapi import Request, Body
 import sqlite3
 import hashlib
-from typing import List
-from datetime import datetime, date, timedelta
+from typing import Dict, Any
+from datetime import datetime
 
 app = FastAPI()
 
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[  # broadened during dev to avoid CORS/host mismatches
+    allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:5173",
@@ -23,7 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# LOGGING MIDDLEWARE: registra todas as requisições (útil para debugar 404)
+# LOGGING MIDDLEWARE
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     print(f"➡️ {request.method} {request.url.path}")
@@ -31,104 +30,19 @@ async def log_requests(request: Request, call_next):
     print(f"⬅️ {request.method} {request.url.path} -> {response.status_code}")
     return response
 
-# DEBUG ROUTE: lista rotas registradas para confirmar endpoints disponíveis
-@app.get("/__routes")
-async def list_routes():
-    routes = []
-    for r in app.routes:
-        # Some routes are Starlette static routes and may not have .methods
-        methods = list(getattr(r, "methods", []) or [])
-        routes.append({"path": getattr(r, "path", str(r)), "name": getattr(r, "name", None), "methods": methods})
-    return {"routes": routes}
-
-# Modelos
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-class LoginResponse(BaseModel):
-    message: str
-    username: str
-    token: str
-
-class UserBase(BaseModel):
-    name: str
-    email: str
-
-class User(UserBase):
-    id: int
-    created_at: str
-
-class EventBase(BaseModel):
-    title: str
-    description: str
-    date: str
-    location: str
-
-class Event(EventBase):
-    id: int
-    created_at: str
-
-class Recomendacao(BaseModel):
-    id: int
-    titulo: str
-    descricao: str
-    tipo: str  # "evento", "dica", "novidade"
-
-class DiaCheckin(BaseModel):
-    dia: int
-    mes: str
-    checkins: int
-
-class CheckinRapido(BaseModel):
-    id: int
-    data: str
-    hora: str
-    modalidade: str
-    disponivel: bool
-
-class CheckinRequest(BaseModel):
-    treino_id: int
-    usuario_email: str
-
-# Banco de dados
+# Banco de dados (mesmo código do arquivo original)
 def get_db_connection():
     conn = sqlite3.connect('vampclubfinal.db')
     conn.row_factory = sqlite3.Row
     return conn
 
 def hash_password(password: str) -> str:
-    """Hash simples da senha"""
     return hashlib.sha256(password.encode()).hexdigest()
 
 def init_db():
     conn = get_db_connection()
     
-    # Tabela de usuários para login
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS login_users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Verificar se já existe o usuário admin
-    admin_exists = conn.execute(
-        'SELECT id FROM login_users WHERE username = ?', 
-        ('admin',)
-    ).fetchone()
-    
-    if not admin_exists:
-        # Criar usuário admin padrão
-        conn.execute(
-            'INSERT INTO login_users (username, password) VALUES (?, ?)',
-            ('admin', hash_password('admin'))
-        )
-        print("✅ Usuário admin criado com sucesso!")
-    
-    # Criar tabela usuario com as colunas corretas (apenas se não existir)
+    # Criar tabelas
     conn.execute('''
         CREATE TABLE IF NOT EXISTS usuario (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,32 +53,10 @@ def init_db():
         )
     ''')
     
-    # Remover criação automática de usuários - usar apenas os existentes no banco
-    # Os usuários já existem: mare.oliveira@icloud.com, dayane@gmail.com, etc.
-    
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            description TEXT,
-            date TEXT NOT NULL,
-            location TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
     conn.execute('''
         CREATE TABLE IF NOT EXISTS treinos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            data TEXT NOT NULL,               -- ISO date YYYY-MM-DD
+            data TEXT NOT NULL,
             hora TEXT NOT NULL,
             modalidade TEXT NOT NULL,
             local TEXT NOT NULL,
@@ -173,6 +65,7 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    
     conn.execute('''
         CREATE TABLE IF NOT EXISTS checkins (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -182,309 +75,163 @@ def init_db():
             FOREIGN KEY(treino_id) REFERENCES treinos(id)
         )
     ''')
-    conn.commit()
-
-    # Seed inicial dos treinos (apenas se estiver vazio)
-    cur = conn.execute('SELECT COUNT(1) as cnt FROM treinos').fetchone()
-    if cur and cur['cnt'] == 0:
-        print("⚙️ Sem treinos no DB — semeando próximos 30 dias")
-        seed_treinos(conn, days=30)
-    conn.close()
-
-def seed_treinos(conn, days: int = 30):
-    """Insere treinos para os próximos `days` dias seguindo padrões de horário/modalidade."""
-    hoje = date.today()
-    modalidades_por_dia = {
-        0: ("Basquete", "Quadra A", "18:00"),  # Segunda
-        1: ("Futsal", "Quadra B", "19:00"),   # Terça
-        2: ("Vôlei", "Quadra A", "18:30"),    # Quarta
-        3: ("Futsal", "Quadra B", "19:00"),   # Quinta
-        4: ("Basquete", "Quadra A", "19:30"), # Sexta
-        5: ("Futsal", "Quadra A", "09:00"),   # Sábado (exemplo)
-        6: (None, None, None),                # Domingo - sem treino
-    }
-    vagas_default = 12
-
-    for i in range(days):
-        d = hoje + timedelta(days=i)
-        wd = d.weekday()  # 0=Mon .. 6=Sun
-        modal = modalidades_por_dia.get(wd)
-        if not modal or modal[0] is None:
-            continue
-        modalidade, local, hora = modal
-        conn.execute('''
-            INSERT INTO treinos (data, hora, modalidade, local, vagas_total, vagas_disponiveis)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (d.isoformat(), hora, modalidade, local, vagas_default, vagas_default))
-    conn.commit()
-    print(f"✅ Seed de treinos criado para os próximos {days} dias")
-
-@app.on_event("startup")
-async def startup():
-    init_db()
-    print("🚀 FastAPI startup completo - rotas registradas")
-
-# Rotas
-@app.get("/")
-async def root():
-    return {"message": "VampClub API está rodando!"}
-
-@app.post("/login", response_model=LoginResponse)
-async def login(credentials: LoginRequest):
-    print(f"🔍 Tentativa de login: {credentials.username}")
-
-    conn = get_db_connection()
     
-    # Buscar usuário na tabela usuario (pode ser por email ou nome)
+    conn.commit()inos reais se não existirem
+    conn.close()
+        ("2025-11-15", "09:00", "Futsal", "Sest Senat", 8),
+@app.on_event("startup")09:00", "Futsal", "Sest Senat", 8),
+async def startup():", "09:00", "Futsal", "Sest Senat", 8),
+    init_db()5-12-06", "09:00", "Futsal", "Sest Senat", 8),
+    print("🚀 FastAPI startup completo - modo simples") 8),
+        ("2025-12-20", "09:00", "Futsal", "Sest Senat", 8),
+# Rotas simplificadas (sem Pydantic models complexos)
+@app.get("/") hora, modalidade, local, vagas in treinos:
+async def root():conn.execute(
+    return {"message": "VampClub API está rodando! (Modo Simples)"} modalidade = ? AND local = ?",
+            (data, hora, modalidade, local)
+@app.post("/login"))
+async def login(credentials: Dict[str, Any]):
+    print(f"🔍 Tentativa de login: {credentials.get('username')}")
+                "INSERT INTO treinos (data, hora, modalidade, local, vagas_total, vagas_disponiveis) VALUES (?, ?, ?, ?, ?, ?)",
+    conn = get_db_connection()odalidade, local, vagas, vagas)
+    # Busca apenas pelo email
     user = conn.execute(
-        'SELECT * FROM usuario WHERE email = ? OR nome = ?',
-        (credentials.username.strip(), credentials.username.strip())
+        'SELECT * FROM usuario WHERE email = ?',
+        (credentials.get('username', '').strip(),)
     ).fetchone()
-    conn.close()
-
+    conn.close()tartup")
+async def startup():
     if not user:
-        print(f"❌ Usuário não encontrado: {credentials.username}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuário ou senha inválidos"
-        )
+        raise HTTPException(status_code=401, detail="Usuário ou senha inválidos")
 
-    # Verificar senha (comparar diretamente já que no banco está em texto plano)
-    if credentials.password.strip() != user['senha']:
-        print(f"❌ Senha incorreta para: {credentials.username}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuário ou senha inválidos"
-        )
-
-    print(f"✅ Login bem-sucedido: {credentials.username}")
-    return LoginResponse(
-        message="Login realizado com sucesso",
-        username=user['nome'],
-        token=f"token-{user['id']}-{datetime.now().timestamp()}"
-    )
-
-@app.get("/api/users", response_model=List[User])
-async def get_users():
+    # Comparação direta da senha (sem hash)complexos)
+    if credentials.get('password', '').strip() != user['senha']:
+        raise HTTPException(status_code=401, detail="Usuário ou senha inválidos")
+    return {"message": "VampClub API está rodando! (Modo Simples)"}
+    return {
+        "message": "Login realizado com sucesso",
+        "username": user['email'],str, Any]):
+        "token": f"token-{user['id']}-{datetime.now().timestamp()}"
+    }
     conn = get_db_connection()
-    users = conn.execute('SELECT * FROM users').fetchall()
-    conn.close()
-    return [dict(user) for user in users]
-
-@app.post("/api/users", response_model=User)
-async def create_user(user: UserBase):
-    conn = get_db_connection()
-    try:
-        # Adiciona senha padrão '123456' para novos usuários (ajuste conforme necessário)
-        password = hash_password("123456")
-        cursor = conn.execute(
-            'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
-            (user.name, user.email, password)
-        )
-        conn.commit()
-        user_id = cursor.lastrowid
-        new_user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
-        conn.close()
-        return dict(new_user)
-    except sqlite3.IntegrityError:
-        conn.close()
-        raise HTTPException(status_code=400, detail="Email já cadastrado")
-
-@app.get("/api/events", response_model=List[Event])
-async def get_events():
-    conn = get_db_connection()
-    events = conn.execute('SELECT * FROM events ORDER BY date DESC').fetchall()
-    conn.close()
-    return [dict(event) for event in events]
-
-@app.post("/api/events", response_model=Event)
-async def create_event(event: EventBase):
-    conn = get_db_connection()
-    cursor = conn.execute(
-        'INSERT INTO events (title, description, date, location) VALUES (?, ?, ?, ?)',
-        (event.title, event.description, event.date, event.location)
-    )
-    conn.commit()
-    event_id = cursor.lastrowid
-    new_event = conn.execute('SELECT * FROM events WHERE id = ?', (event_id,)).fetchone()
-    conn.close()
-    return dict(new_event)
-
-@app.get("/api/events/{event_id}", response_model=Event)
-async def get_event(event_id: int):
-    conn = get_db_connection()
-    event = conn.execute('SELECT * FROM events WHERE id = ?', (event_id,)).fetchone()
-    conn.close()
-    if event is None:
-        raise HTTPException(status_code=404, detail="Evento não encontrado")
-    return dict(event)
-
-@app.delete("/api/events/{event_id}")
-async def delete_event(event_id: int):
-    conn = get_db_connection()
-    cursor = conn.execute('DELETE FROM events WHERE id = ?', (event_id,))
-    conn.commit()
-    conn.close()
-    if cursor.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Evento não encontrado")
-    return {"message": "Evento deletado com sucesso"}
-
 @app.get("/admin/recomendacoes")
 async def get_recomendacoes():
-    """Retorna recomendações para o dashboard"""
-    print("📊 Endpoint /admin/recomendacoes chamado")
-    recomendacoes = [
-        {
+    return [ECT * FROM usuario WHERE email = ?',
+        {credentials.get('username', '').strip(),)
             "id": 1,
-            "titulo": "Treinos de Verão 2025",
-            "descricao": "Prepare-se para o verão com nossos treinos intensivos de janeiro e fevereiro",
-            "tipo": "evento"
+            "titulo": "Próximo Intervamp XII",
+            "descricao": "Lorem ipsum dolor sit amet consectetur. Magnis pellentesque felis ullamcorper imperdiet.",
+            "tipo": "evento",
+            "imagem": "/eventos1.png"de=401, detail="Usuário ou senha inválidos")
         },
-        {
-            "id": 2,
-            "titulo": "Campeonato InterVamp",
-            "descricao": "Inscrições abertas para o campeonato interno de todas as modalidades",
-            "tipo": "evento"
-        },
-        {
+        {paração direta da senha (sem hash)
+            "id": 2,et('password', '').strip() != user['senha']:
+            "titulo": "Intervamp XI",de=401, detail="Usuário ou senha inválidos")
+            "descricao": "Lorem ipsum dolor sit amet consectetur. Magnis pellentesque felis ullamcorper imperdiet.",
+            "tipo": "evento",
+            "imagem": "/XIintervamp.png"sucesso",
+        },sername": user['email'],
+        {token": f"token-{user['id']}-{datetime.now().timestamp()}"
             "id": 3,
-            "titulo": "Dica: Hidratação",
-            "descricao": "Beba pelo menos 500ml de água 2 horas antes do treino para melhor performance",
-            "tipo": "dica"
+            "titulo": "Intervamp VIII",
+            "descricao": "Lorem ipsum dolor sit amet consectetur. Magnis pellentesque felis ullamcorper imperdiet.",
+            "tipo": "evento",:
+            "imagem": "/viiiintervamp.png"
+        },
+        {   "id": 1,
+            "id": 4,: "Próximo Intervamp XII",
+            "titulo": "Outros Intervamps",r sit amet consectetur. Magnis pellentesque felis ullamcorper imperdiet.",
+            "descricao": "Lorem ipsum dolor sit amet consectetur. Magnis pellentesque felis ullamcorper imperdiet.",
+            "tipo": "evento",os1.png"
+            "imagem": "/intervampx.png"
         }
-    ]
-    print(f"✅ Retornando {len(recomendacoes)} recomendações")
-    return recomendacoes
-
-# --- ADDED: aliases para evitar 404 por variações de URL do frontend ---
-@app.get("/admin/recomendacoes/")
-async def get_recomendacoes_trailing():
-    """Alias com barra final"""
-    return await get_recomendacoes()
-
-@app.get("/api/admin/recomendacoes")
-async def get_recomendacoes_api():
-    """Alias sob /api/admin para clientes que usam esse prefixo"""
-    return await get_recomendacoes()
-
-@app.get("/api/admin/recomendacoes/")
-async def get_recomendacoes_api_trailing():
-    """Alias com barra final sob /api/admin"""
-    return await get_recomendacoes()
-# --- end aliases ---
-
-@app.get("/admin/dias-checkin")
-async def get_dias_checkin():
-    """Retorna dados dos próximos treinos disponíveis para check-in (baseados na tabela treinos)."""
-    print("📊 Endpoint /admin/dias-checkin chamado (via tabela treinos)")
-    conn = get_db_connection()
-    hoje = date.today()
-    fim = hoje + timedelta(days=30)
-    rows = conn.execute(
-        'SELECT * FROM treinos WHERE data BETWEEN ? AND ? ORDER BY data ASC',
-        (hoje.isoformat(), fim.isoformat())
-    ).fetchall()
-    conn.close()
-
-    # Filtrar apenas sábados e pegar próximos 4 únicos
-    sabados = []
-    for r in rows:
-        d = datetime.fromisoformat(r['data']).date()
-        if d.weekday() == 5:  # sábado
-            sabados.append({
-                "id": r['id'],
-                "dia": d.day,
-                "mes": d.month,
-                "ano": d.year,
-                "local": r['local'],
-                "horario": r['hora'],
-                "modalidade": r['modalidade'],
-                "vagas_disponiveis": r['vagas_disponiveis']
-            })
-        if len(sabados) >= 4:
-            break
-
-    print(f"✅ Retornando {len(sabados)} treinos (sábados)")
-    return sabados
-
-@app.get("/api/proximos-checkins")
+    ]       "id": 2,
+            "titulo": "Intervamp XI",
+@app.get("/api/proximos-checkins")sum dolor sit amet consectetur. Magnis pellentesque felis ullamcorper imperdiet.",
 async def get_proximos_checkins():
-    """Retorna os próximos check-ins disponíveis baseado na tabela treinos (próximos 7 dias)."""
-    print("📅 Buscando próximos check-ins disponíveis (tabela treinos)")
     conn = get_db_connection()
-    hoje = date.today()
-    inicio = hoje
-    fim = hoje + timedelta(days=30)  # Aumentado para 30 dias para pegar os sábados de novembro
     rows = conn.execute(
-        'SELECT * FROM treinos WHERE data BETWEEN ? AND ? ORDER BY data ASC, hora ASC',
-        (inicio.isoformat(), fim.isoformat())
+        "SELECT id, data, hora, modalidade, local, vagas_disponiveis FROM treinos ORDER BY data ASC"
     ).fetchall()
-    conn.close()
-
-    proximos = []
-    for r in rows:
-        d = datetime.fromisoformat(r['data']).date()
-        # Filtrar apenas sábados (como na tela de check-in)
-        if d.weekday() == 5:  # sábado
-            proximos.append({
-                "id": r['id'],
-                "data": r['data'],
-                "dia_semana": "Sábado",
-                "hora": r['hora'],
-                "modalidade": r['modalidade'],
-                "vagas_disponiveis": r['vagas_disponiveis'],
-                "disponivel": bool(r['vagas_disponiveis'] > 0),
-                "local": r['local']
-            })
-    
-    print(f"✅ Retornando {len(proximos)} check-ins disponíveis (sábados)")
-    return proximos
+    conn.close()VIII",
+    dias_semana = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]um dolor sit amet consectetur. Magnis pellentesque felis ullamcorper imperdiet.",
+    result = [],
+    for row in rows:mp.png"
+        data_obj = datetime.strptime(row["data"], "%Y-%m-%d")
+        dia_semana = dias_semana[data_obj.weekday()]
+        result.append({
+            "id": row["id"],  "titulo": "Outros Intervamps",
+            "data": row["data"],   "descricao": "Lorem ipsum dolor sit amet consectetur. Magnis pellentesque felis ullamcorper imperdiet.",
+            "dia_semana": dia_semana,"evento",
+            "hora": row["hora"],x.png"
+            "modalidade": row["modalidade"],
+            "vagas_disponiveis": row["vagas_disponiveis"],
+            "disponivel": row["vagas_disponiveis"] > 0,
+            "local": row["local"]
+        })():
+    return results de novembro e dezembro de 2025
+ [
+from fastapi import Body
 
 @app.post("/api/checkin-rapido")
-async def fazer_checkin_rapido(checkin: CheckinRequest):
-    """Realiza check-in rápido em um treino: verifica vagas, decrementa e registra checkin."""
-    print(f"🔔 Tentativa de checkin rápido - Treino ID: {checkin.treino_id}, Usuário: {checkin.usuario_email}")
+async def checkin_rapido(payload: Dict[str, Any] = Body(...)):
+    treino_id = payload.get("treino_id")
+    usuario_email = payload.get("usuario_email")
+    if not treino_id or not usuario_email:
+        raise HTTPException(status_code=400, detail="treino_id e usuario_email são obrigatórios")
+
     conn = get_db_connection()
-    try:
-        # Iniciar transação explícita
-        cur = conn.execute('SELECT * FROM treinos WHERE id = ?', (checkin.treino_id,))
-        treino = cur.fetchone()
-        if treino is None:
-            raise HTTPException(status_code=404, detail="Treino não encontrado")
-
-        if treino['vagas_disponiveis'] <= 0:
-            raise HTTPException(status_code=400, detail="Não há vagas disponíveis para este treino")
-
-        # decrementar vaga e inserir checkin
-        conn.execute(
-            'UPDATE treinos SET vagas_disponiveis = vagas_disponiveis - 1 WHERE id = ? AND vagas_disponiveis > 0',
-            (checkin.treino_id,)
-        )
-        conn.execute(
-            'INSERT INTO checkins (treino_id, usuario_email, timestamp) VALUES (?, ?, ?)',
-            (checkin.treino_id, checkin.usuario_email, datetime.now().isoformat())
-        )
-        conn.commit()
-
-        # obter vagas atualizadas
-        updated = conn.execute('SELECT vagas_disponiveis FROM treinos WHERE id = ?', (checkin.treino_id,)).fetchone()
-        vagas_restantes = updated['vagas_disponiveis'] if updated else 0
-
-        print(f"✅ Check-in realizado: treino {checkin.treino_id}, vagas restantes: {vagas_restantes}")
-        return {
-            "message": "Check-in realizado com sucesso!",
-            "treino_id": checkin.treino_id,
-            "usuario": checkin.usuario_email,
-            "vagas_restantes": vagas_restantes,
-            "timestamp": datetime.now().isoformat()
-        }
-    except HTTPException as e:
-        conn.rollback()
-        print(f"❌ Check-in falhou: {e.detail}")
-        raise
-    except Exception as e:
-        conn.rollback()
-        print(f"❌ Erro interno no check-in rápido: {e}")
-        raise HTTPException(status_code=500, detail="Erro ao processar check-in")
-    finally:
+    # Verifica se já existe check-in para esse treino e usuário
+    existe = conn.execute(
+        "SELECT id FROM checkins WHERE treino_id = ? AND usuario_email = ?",
+        (treino_id, usuario_email)
+    ).fetchone()
+    if existe:
         conn.close()
+        raise HTTPException(status_code=409, detail="Check-in já realizado para este treino")
+
+    # Atualiza vagas disponíveis
+    treino = conn.execute(
+        "SELECT vagas_disponiveis FROM treinos WHERE id = ?",
+        (treino_id,)
+    ).fetchone()
+    if treino and treino["vagas_disponiveis"] <= 0:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Não há vagas disponíveis para este treino")
+
+    # Registra o check-in
+    conn.execute(
+        "INSERT INTO checkins (treino_id, usuario_email, timestamp) VALUES (?, ?, ?)",
+        (treino_id, usuario_email, datetime.now().isoformat())
+    )
+    # Diminui uma vaga
+    conn.execute(
+        "UPDATE treinos SET vagas_disponiveis = vagas_disponiveis - 1 WHERE id = ?",
+        (treino_id,)
+    )
+    conn.commit()
+    conn.close(),
+    return {"message": "Check-in realizado com sucesso"}   {
+            "id": 5,
+if __name__ == "__main__":5-12-13",
+    import uvicorn            "dia_semana": "Sábado",
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+        raise HTTPException(status_code=400, detail="Não há vagas disponíveis para este treino")
+
+    # Registra o check-in
+    conn.execute(
+        "INSERT INTO checkins (treino_id, usuario_email, timestamp) VALUES (?, ?, ?)",
+        (treino_id, usuario_email, datetime.now().isoformat())
+    )
+    # Diminui uma vaga
+    conn.execute(
+        "UPDATE treinos SET vagas_disponiveis = vagas_disponiveis - 1 WHERE id = ?",
+        (treino_id,)
+    )
+    conn.commit()
+    conn.close()
+    return {"message": "Check-in realizado com sucesso"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
